@@ -1,24 +1,102 @@
+from enum import Enum
+
 import requests
-
-url = "http://192.168.1.218/Forms/login1"
-
-payload='login_username=apc&login_password=apc&submit=Log%2BOn'
-headers = {
-  'Connection': 'keep-alive',
-  'Cache-Control': 'max-age=0',
-  'Upgrade-Insecure-Requests': '1',
-  'Origin': 'http://192.168.1.218',
-  'Content-Type': 'application/x-www-form-urlencoded',
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-  'Referer': 'http://192.168.1.218/logon.htm',
-  'Accept-Language': 'en-US,en;q=0.9',
-  'Cookie': 'C0=apc; C0=apc'
-}
-
-response = requests.request("POST", url, headers=headers, data=payload)
-
-print(response.text)
+import sys
 
 
+class OutletCommand(Enum):
+    NO_ACTION = 1
+    ON_IMMEDIATE = 2
+    ON_DELAYED = 3
+    OFF_IMMEDIATE = 4
+    OFF_DELAYED = 5
+    REBOOT_IMMEDIATE = 6
+    REBOOT_DELAYED = 7
+    CANCEL_PENDING_COMMANDS = 8
 
+
+class PyAPC:
+
+    def __init__(self, _url: str, _username: str, _password: str):
+        self.url = _url;
+        self.username = _username
+        self.password = _password
+        self.dynamic_url = ""
+
+    def login(self):
+        _login_url = url = f"{self.url}/Forms/login1"
+        self._set_header(self.url + '/logon.htm')
+        payload = f'login_username={self.username}&login_password={self.password}&submit=Log%2BOn'
+        response = requests.request("POST", _login_url, headers=self.headers, data=payload)
+        if response.status_code != 200:
+            # Try to log off then re-login 1x
+            self.logoff()
+            response = requests.request("POST", _login_url, headers=self.headers, data=payload)
+            if response.status_code != 200:
+                print("Error logging in.  Exiting...")
+                sys.exit()
+        self.dynamic_url = response.url.split('/')[4]
+        print(f"Login Success, {self.dynamic_url}")
+
+    def apply(self):
+        pass
+
+    def _set_header(self, ref):
+        self.headers = {
+            'Connection': 'keep-alive',
+            'Cache-Control': 'max-age=0',
+            'Upgrade-Insecure-Requests': '1',
+            'Origin': self.url,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                          'Chrome/91.0.4472.114 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,'
+                      '*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+            'Referer': ref,
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Cookie': 'C0=apc; C0=apc'
+        }
+
+    def logoff(self):
+        _logoff_url = f"{self.url}/NMC/{self.dynamic_url}/logout.htm"
+        self._set_header(self.url + "/" + self.dynamic_url + "/" + "outlctrl.html")
+        payload = {}
+        response = requests.request("GET", _logoff_url, headers=self.headers, data=payload)
+
+    def apply_outlet_command(self, outlet_command: OutletCommand, outlets: []):
+        _ref = f"{self.url}/NMC/{self.dynamic_url}/outlctrl.htm"
+        _url = f"{self.url}/NMC/{self.dynamic_url}/Forms/outlctrl1"
+        payload = f'rPDUOutletCtrl={outlet_command.value}'
+        _outlet_cmd = ""
+
+        for outlet in outlets:
+            if outlet <= 8:
+                outlet = outlet + 1
+                _outlet_cmd = _outlet_cmd + f'&OL_Cntrl_Col1_Btn=%3F{outlet}%2C2'
+            else:
+                outlet = outlet - 7
+                _outlet_cmd = _outlet_cmd + f'&OL_Cntrl_Col2_Btn=%3F{outlet}%2C2%2C2'
+            print(outlet)
+        payload = payload + _outlet_cmd + "&submit=Next%2B%3E%3E"
+        response = requests.request("POST", _url, headers=self._set_header(_ref), data=payload)
+        if response.status_code == 200:
+            r = self._run_confirm()
+            apc.logoff()  # clean up so others can login
+        else:
+            print(f"Error running outlet command {response.status_code}")
+            print(response.text)
+
+    def _run_confirm(self):
+        payload = 'submit=Apply&Control='
+        files = {}
+        url = f"{self.url}/NMC/{self.dynamic_url}/Forms/rpduconf1"
+        self._set_header(f"{self.url}/NMC/{self.dynamic_url}/rpduconf.htm")
+        response = requests.request("POST", url, headers=self.headers, data=payload, files=files)
+        return response
+
+
+if __name__ == "__main__":
+    apc = PyAPC("http://192.168.1.218", "apc", "apc")
+    apc.login()
+
+    apc.apply_outlet_command(OutletCommand.OFF_IMMEDIATE, [14, 6])
