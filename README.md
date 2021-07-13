@@ -1,5 +1,5 @@
 # pyAPC
-Python library to control APC UPS PDU, specifically a AP7911A.  This may work with other models.
+Python library to control APC UPS PDU, specifically a AP7911A.  This may work with other models.  Note you need to enable DHCP (without tokens?!) and the http server.  You can do this by getting a serial to usb cable for this unit.
 
 ## Usage
 Just import PyAPC and create a instance of the class object.  Then you can just send outlet commands like the following.  The 2nd parameter in the apply_outlet_command is a list of integers that correspond to the outlet number.  
