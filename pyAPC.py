@@ -22,6 +22,7 @@ class PyAPC:
         self.username = _username
         self.password = _password
         self.dynamic_url = ""
+        self.logoff()
 
     def login(self):
         _login_url = url = f"{self.url}/Forms/login1"
@@ -79,9 +80,11 @@ class PyAPC:
             print(outlet)
         payload = payload + _outlet_cmd + "&submit=Next%2B%3E%3E"
         response = requests.request("POST", _url, headers=self._set_header(_ref), data=payload)
+        print(response.text)
         if response.status_code == 200:
             r = self._run_confirm()
-            apc.logoff()  # clean up so others can login
+            print(r.text)
+            self.logoff()  # clean up so others can login
         else:
             print(f"Error running outlet command {response.status_code}")
             print(response.text)
