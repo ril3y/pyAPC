@@ -88,6 +88,7 @@ class PyAPC:
         else:
             print(f"Error running outlet command {response.status_code}")
             print(response.text)
+            self.logoff()  # clean up so others can login
 
     def _run_confirm(self):
         payload = 'submit=Apply&Control='
@@ -102,4 +103,4 @@ if __name__ == "__main__":
     apc = PyAPC("http://192.168.1.218", "apc", "apc")
     apc.login()
 
-    apc.apply_outlet_command(OutletCommand.OFF_IMMEDIATE, [14, 6])
+    #apc.apply_outlet_command(OutletCommand.OFF_IMMEDIATE, [14, 6])
