@@ -65,6 +65,8 @@ class PyAPC:
         response = requests.request("GET", _logoff_url, headers=self.headers, data=payload)
 
     def apply_outlet_command(self, outlet_command: OutletCommand, outlets: []):
+        self.logoff() #Clears any previous logins that might be blocking.
+        self.login()
         _ref = f"{self.url}/NMC/{self.dynamic_url}/outlctrl.htm"
         _url = f"{self.url}/NMC/{self.dynamic_url}/Forms/outlctrl1"
         payload = f'rPDUOutletCtrl={outlet_command.value}'

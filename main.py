@@ -19,6 +19,7 @@ if __name__ == "__main__":
     _run = True
     while _run:
         workers_offline = hive.check_workers_offline()
+        print(f'Time: {time.ctime()}')
         hive.print_data()
         for w in workers_offline:
             print(f'WORKER OFFLINE: {w.name}')

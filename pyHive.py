@@ -96,7 +96,6 @@ class PyHive(object):
     def print_data(self):
         for rig in self.rigs:
             print('------------------------------------------')
-            print(f'Time: {time.ctime()}')
             print(f'Rig Name: {rig.name}')
 
             for c in rig.coins:
