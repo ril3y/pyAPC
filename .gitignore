@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+hive_api_key.txt
 # C extensions
 *.so
 

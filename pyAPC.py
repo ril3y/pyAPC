@@ -1,7 +1,8 @@
 from enum import Enum
-
+import json
 import requests
 import sys
+from requests.exceptions import ConnectionError
 
 
 class OutletCommand(Enum):
@@ -18,26 +19,33 @@ class OutletCommand(Enum):
 class PyAPC:
 
     def __init__(self, _url: str, _username: str, _password: str):
-        self.url = _url;
+        self.url = _url
         self.username = _username
         self.password = _password
         self.dynamic_url = ""
         self.logoff()
 
+    def get_url(self) -> str:
+        return self.url
+
     def login(self):
-        _login_url = url = f"{self.url}/Forms/login1"
-        self._set_header(self.url + '/logon.htm')
-        payload = f'login_username={self.username}&login_password={self.password}&submit=Log%2BOn'
-        response = requests.request("POST", _login_url, headers=self.headers, data=payload)
-        if response.status_code != 200:
-            # Try to log off then re-login 1x
-            self.logoff()
+        try:
+            _login_url = url = f"{self.url}/Forms/login1"
+            self._set_header(self.url + '/logon.htm')
+            payload = f'login_username={self.username}&login_password={self.password}&submit=Log%2BOn'
             response = requests.request("POST", _login_url, headers=self.headers, data=payload)
             if response.status_code != 200:
-                print("Error logging in.  Exiting...")
-                sys.exit()
-        self.dynamic_url = response.url.split('/')[4]
-        print(f"Login Success, {self.dynamic_url}")
+                # Try to log off then re-login 1x
+                self.logoff()
+                response = requests.request("POST", _login_url, headers=self.headers, data=payload)
+                if response.status_code != 200:
+                    print("Error logging in.  Exiting...")
+                    sys.exit()
+            self.dynamic_url = response.url.split('/')[4]
+            print(f"Login Success, {self.dynamic_url}")
+        except ConnectionError as e:
+            print(f"Error Connecting to {self.url} - Exiting...")
+            sys.exit(-1)
 
     def apply(self):
         pass
@@ -59,38 +67,46 @@ class PyAPC:
         }
 
     def logoff(self):
-        _logoff_url = f"{self.url}/NMC/{self.dynamic_url}/logout.htm"
-        self._set_header(self.url + "/" + self.dynamic_url + "/" + "outlctrl.html")
-        payload = {}
-        response = requests.request("GET", _logoff_url, headers=self.headers, data=payload)
+        try:
+            _logoff_url = f"{self.url}/NMC/{self.dynamic_url}/logout.htm"
+            self._set_header(self.url + "/" + self.dynamic_url + "/" + "outlctrl.html")
+            payload = {}
+            response = requests.request("GET", _logoff_url, headers=self.headers, data=payload)
+        except ConnectionError as e:
+            print(f"Error Connecting to {self.url} - Exiting...")
+            sys.exit(-1)
 
     def apply_outlet_command(self, outlet_command: OutletCommand, outlets: []):
-        self.logoff() #Clears any previous logins that might be blocking.
-        self.login()
-        _ref = f"{self.url}/NMC/{self.dynamic_url}/outlctrl.htm"
-        _url = f"{self.url}/NMC/{self.dynamic_url}/Forms/outlctrl1"
-        payload = f'rPDUOutletCtrl={outlet_command.value}'
-        _outlet_cmd = ""
+        try:
+            self.logoff()  # Clears any previous logins that might be blocking.
+            self.login()
+            _ref = f"{self.url}/NMC/{self.dynamic_url}/outlctrl.htm"
+            _url = f"{self.url}/NMC/{self.dynamic_url}/Forms/outlctrl1"
+            payload = f'rPDUOutletCtrl={outlet_command.value}'
+            _outlet_cmd = ""
 
-        for outlet in outlets:
-            if outlet <= 8:
-                outlet = outlet + 1
-                _outlet_cmd = _outlet_cmd + f'&OL_Cntrl_Col1_Btn=%3F{outlet}%2C2'
+            for outlet in outlets:
+                if outlet <= 8:
+                    outlet = outlet + 1
+                    _outlet_cmd = _outlet_cmd + f'&OL_Cntrl_Col1_Btn=%3F{outlet}%2C2'
+                else:
+                    outlet = outlet - 7
+                    _outlet_cmd = _outlet_cmd + f'&OL_Cntrl_Col2_Btn=%3F{outlet}%2C2%2C2'
+                print(outlet)
+            payload = payload + _outlet_cmd + "&submit=Next%2B%3E%3E"
+            response = requests.request("POST", _url, headers=self._set_header(_ref), data=payload)
+            #print(response.text)
+            if response.status_code == 200:
+                r = self._run_confirm()
+                print(r.text)
+                self.logoff()  # clean up so others can login
             else:
-                outlet = outlet - 7
-                _outlet_cmd = _outlet_cmd + f'&OL_Cntrl_Col2_Btn=%3F{outlet}%2C2%2C2'
-            print(outlet)
-        payload = payload + _outlet_cmd + "&submit=Next%2B%3E%3E"
-        response = requests.request("POST", _url, headers=self._set_header(_ref), data=payload)
-        print(response.text)
-        if response.status_code == 200:
-            r = self._run_confirm()
-            print(r.text)
-            self.logoff()  # clean up so others can login
-        else:
-            print(f"Error running outlet command {response.status_code}")
-            print(response.text)
-            self.logoff()  # clean up so others can login
+                print(f"Error running outlet command {response.status_code}")
+                print(response.text)
+                self.logoff()  # clean up so others can login
+        except ConnectionError as e:
+            print(f"Error Connecting to {self.url} - Exiting...")
+            sys.exit(-1)
 
     def _run_confirm(self):
         payload = 'submit=Apply&Control='
@@ -100,9 +116,12 @@ class PyAPC:
         response = requests.request("POST", url, headers=self.headers, data=payload, files=files)
         return response
 
+    def toJson(self):
+        return json.dumps(self, default=lambda o: o.__dict__,
+                   sort_keys=True, indent=4)
 
 if __name__ == "__main__":
     apc = PyAPC("http://192.168.1.218", "apc", "apc")
     apc.login()
 
-    #apc.apply_outlet_command(OutletCommand.OFF_IMMEDIATE, [14, 6])
+    # apc.apply_outlet_command(OutletCommand.OFF_IMMEDIATE, [14, 6])
